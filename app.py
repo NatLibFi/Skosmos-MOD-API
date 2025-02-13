@@ -1,9 +1,11 @@
 from flask import Flask, make_response
 from rdflib import Graph, URIRef, Literal, Namespace
-from rdflib.namespace import DCTERMS
+from rdflib.namespace import RDF, DCTERMS
 
 app = Flask(__name__)
 
+
+MOD = Namespace('https://w3id.org/mod#')
 
 JSONLD_CONTEXT = {
     "@context": {
@@ -15,6 +17,7 @@ JSONLD_CONTEXT = {
 @app.route("/artefacts", methods=['GET'])
 def artefacts():
     g = Graph()
+    g.add((URIRef('http://example.org/ex1'), RDF.type, MOD.SemanticArtefact))
     g.add((URIRef('http://example.org/ex1'), DCTERMS.title, Literal("Lorem Ipsum", lang='en')))
     response = make_response(g.serialize(format='json-ld', context=JSONLD_CONTEXT))
     response.headers['Content-Type'] = 'application/json'
