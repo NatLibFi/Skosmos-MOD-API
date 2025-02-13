@@ -1,11 +1,24 @@
-from flask import Flask
+from flask import Flask, make_response
+from rdflib import Graph, URIRef, Literal, Namespace
+from rdflib.namespace import DCTERMS
 
 app = Flask(__name__)
 
 
+JSONLD_CONTEXT = {
+    "@context": {
+        "dcterms": str(DCTERMS)
+    }
+}
+
+
 @app.route("/artefacts", methods=['GET'])
 def artefacts():
-    return "/artefacts"
+    g = Graph()
+    g.add((URIRef('http://example.org/ex1'), DCTERMS.title, Literal("Lorem Ipsum", lang='en')))
+    response = make_response(g.serialize(format='json-ld', context=JSONLD_CONTEXT))
+    response.headers['Content-Type'] = 'application/json'
+    return response
 
 
 @app.route("/artefacts/<artefactID>", methods=['GET'])
