@@ -1,6 +1,6 @@
 from flask import Flask, make_response
 from rdflib import Graph, URIRef, Literal, Namespace
-from rdflib.namespace import RDF, DCTERMS
+from rdflib.namespace import RDF, DCTERMS, DCAT
 
 app = Flask(__name__)
 
@@ -8,17 +8,24 @@ app = Flask(__name__)
 MOD = Namespace('https://w3id.org/mod#')
 
 JSONLD_CONTEXT = {
-    "@context": {
-        "dcterms": str(DCTERMS)
-    }
+    "dcterms": str(DCTERMS),
+    "dcat": str(DCAT)
 }
 
+API_BASE_URL = 'https://api.finto.fi/rest/v1/'
 
 @app.route("/artefacts", methods=['GET'])
 def artefacts():
     g = Graph()
+
     g.add((URIRef('http://example.org/ex1'), RDF.type, MOD.SemanticArtefact))
     g.add((URIRef('http://example.org/ex1'), DCTERMS.title, Literal("Lorem Ipsum", lang='en')))
+    g.add((URIRef('http://example.org/ex1'), DCTERMS.identifier, Literal("https://example.org/identifier/identifierID", lang='en')))
+    g.add((URIRef('http://example.org/ex1'), DCTERMS.language, Literal("en", lang='en')))
+    g.add((URIRef('http://example.org/ex1'), DCTERMS.type, Literal("Lorem Ipsum", lang='en')))
+    g.add((URIRef('http://example.org/ex1'), DCTERMS.accessRights, Literal("public", lang='en')))
+    g.add((URIRef('http://example.org/ex1'), DCAT.landingPage, Literal("Lorem Ipsum", lang='en')))
+
     response = make_response(g.serialize(format='json-ld', context=JSONLD_CONTEXT))
     response.headers['Content-Type'] = 'application/json'
     return response
