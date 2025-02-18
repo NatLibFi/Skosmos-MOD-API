@@ -1,6 +1,7 @@
 from flask import Flask, make_response
 from rdflib import Graph, URIRef, Literal, Namespace
 from rdflib.namespace import RDF, DCTERMS, DCAT
+import requests
 
 app = Flask(__name__)
 
@@ -9,25 +10,34 @@ MOD = Namespace('https://w3id.org/mod#')
 
 JSONLD_CONTEXT = {
     "dcterms": str(DCTERMS),
-    "dcat": str(DCAT)
+    "dcat": str(DCAT),
+    "mod": str(MOD)
 }
 
-API_BASE_URL = 'https://api.finto.fi/rest/v1/'
+API_BASE_URL = "https://api.finto.fi/rest/v1/"
 
 @app.route("/artefacts", methods=['GET'])
 def artefacts():
     g = Graph()
 
-    g.add((URIRef('http://example.org/ex1'), RDF.type, MOD.SemanticArtefact))
-    g.add((URIRef('http://example.org/ex1'), DCTERMS.title, Literal("Lorem Ipsum", lang='en')))
-    g.add((URIRef('http://example.org/ex1'), DCTERMS.identifier, Literal("https://example.org/identifier/identifierID", lang='en')))
-    g.add((URIRef('http://example.org/ex1'), DCTERMS.language, Literal("en", lang='en')))
-    g.add((URIRef('http://example.org/ex1'), DCTERMS.type, Literal("Lorem Ipsum", lang='en')))
-    g.add((URIRef('http://example.org/ex1'), DCTERMS.accessRights, Literal("public", lang='en')))
-    g.add((URIRef('http://example.org/ex1'), DCAT.landingPage, Literal("Lorem Ipsum", lang='en')))
+    vocabularies = requests.get(API_BASE_URL + "vocabularies", params={ "lang": "en" }).json()
+    for voc in vocabularies['vocabularies']:
+        voc_details = requests.get(API_BASE_URL + voc['id']).json()
+
+        uri = URIRef("http://example.org/" + voc_details['id'])
+
+        g.add((uri, RDF.type, MOD.SemanticArtefact))
+        g.add((uri, DCTERMS.title, Literal(voc_details['title'], lang='en')))
+        g.add((uri, DCTERMS.identifier, Literal(voc_details['id'], lang='en')))
+        g.add((uri, DCTERMS.type, MOD.SemanticArtefact))
+        g.add((uri, DCTERMS.accessRights, Literal("public", lang='en')))
+        g.add((uri, DCAT.landingPage, Literal(voc_details['@context']['@base'], lang='en')))
+
+        for lang in voc_details['languages']:
+            g.add((uri, DCTERMS.language, Literal(lang, lang='en')))
 
     response = make_response(g.serialize(format='json-ld', context=JSONLD_CONTEXT))
-    response.headers['Content-Type'] = 'application/json'
+    response.headers['Content-Type'] = "application/json"
     return response
 
 
