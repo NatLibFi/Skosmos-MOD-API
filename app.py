@@ -20,9 +20,9 @@ API_BASE_URL = "https://api.finto.fi/rest/v1/"
 def artefacts():
     g = Graph()
 
-    vocabularies = requests.get(API_BASE_URL + "vocabularies", params={ "lang": "en" }).json()
+    vocabularies = requests.get(API_BASE_URL + "vocabularies/", params={ "lang": "en" }).json()
     for voc in vocabularies['vocabularies']:
-        voc_details = requests.get(API_BASE_URL + voc['id']).json()
+        voc_details = requests.get(API_BASE_URL + voc['id'] + "/", params={ 'lang': "en" }).json()
 
         uri = URIRef("http://example.org/" + voc_details['id'])
 
@@ -43,7 +43,26 @@ def artefacts():
 
 @app.route("/artefacts/<artefactID>", methods=['GET'])
 def artefact(artefactID):
-    return "/artefacts/" + artefactID
+    g = Graph()
+
+    params = { "lang": "en" }
+    voc_details = requests.get(API_BASE_URL + artefactID + "/", params=params).json()
+
+    uri = URIRef("http://example.org/" + voc_details['id'])
+
+    g.add((uri, RDF.type, MOD.SemanticArtefact))
+    g.add((uri, DCTERMS.title, Literal(voc_details['title'], lang='en')))
+    g.add((uri, DCTERMS.identifier, Literal(voc_details['id'], lang='en')))
+    g.add((uri, DCTERMS.type, MOD.SemanticArtefact))
+    g.add((uri, DCTERMS.accessRights, Literal("public", lang='en')))
+    g.add((uri, DCAT.landingPage, Literal(voc_details['@context']['@base'], lang='en')))
+
+    for lang in voc_details['languages']:
+        g.add((uri, DCTERMS.language, Literal(lang, lang='en')))
+
+    response = make_response(g.serialize(format='json-ld', context=JSONLD_CONTEXT))
+    response.headers['Content-Type'] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/distributions", methods=['GET'])
