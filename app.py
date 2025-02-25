@@ -139,7 +139,23 @@ def artefact_resource_schemes(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/collection", methods=["GET"])
 def artefact_resource_collection(artefactID):
-    return "/artefacts/" + artefactID + "/resources/collection"
+    g = Graph()
+
+    voc_details = requests.get(API_BASE_URL + artefactID + "/groups", params={ "lang": "en" }).json()
+
+    for group in voc_details.get("groups"):
+        uri = URIRef(group["uri"])
+        
+        g.add((uri, RDF.type, SKOS.Collection))
+        g.add((uri, SKOS.prefLabel, Literal(group["prefLabel"], lang="en")))
+
+        if group.get("childGroups"):
+            for child in group.get("childGroups"):
+                g.add((uri, SKOS.member, URIRef(child)))
+
+    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/resources/labels", methods=["GET"])
