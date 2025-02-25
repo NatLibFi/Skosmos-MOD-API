@@ -1,6 +1,6 @@
-from flask import Flask, make_response
+from flask import Flask, make_response, request
 from rdflib import Graph, URIRef, Literal, Namespace
-from rdflib.namespace import RDF, DCTERMS, DCAT
+from rdflib.namespace import RDF, RDFS, DCTERMS, DCAT, SKOS
 import requests
 
 app = Flask(__name__)
@@ -11,7 +11,9 @@ MOD = Namespace("https://w3id.org/mod#")
 JSONLD_CONTEXT = {
     "dcterms": str(DCTERMS),
     "dcat": str(DCAT),
-    "mod": str(MOD)
+    "mod": str(MOD),
+    "rdfs": str(RDFS),
+    "skos": str(SKOS)
 }
 
 API_BASE_URL = "https://api.finto.fi/rest/v1/"
@@ -116,7 +118,23 @@ def artefact_resource_individuals(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/schemes", methods=["GET"])
 def artefact_resource_schemes(artefactID):
-    return "/artefacts/" + artefactID + "/resources/schemes"
+    g = Graph()
+
+    voc_details = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" }).json()
+
+    for scheme in voc_details.get("conceptschemes"):
+        uri = URIRef(scheme["uri"])
+        g.add((uri, RDF.type, URIRef(scheme["type"])))
+        if scheme.get("label"):
+            g.add((uri, RDFS.label, Literal(scheme["label"], lang="en")))
+        if scheme.get("prefLabel"):
+            g.add((uri,SKOS.prefLabel, Literal(scheme["prefLabel"], lang="en")))
+        if scheme.get("title"):
+            g.add((uri, DCTERMS.title, Literal(scheme["title"], lang="en")))
+
+    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/resources/collection", methods=["GET"])
@@ -151,7 +169,24 @@ def search():
 
 @app.route("/search/content", methods=["GET"])
 def search_content():
-    return "/search/content"
+    g = Graph()
+    q = request.args.get("q")
+
+    search_results = requests.get(API_BASE_URL + "/search/", params={ "query": q, "lang": "en", "unique": True }).json()["results"]
+    for res in search_results:
+        uri = URIRef(res["uri"])
+
+        g.add((uri, SKOS.prefLabel, Literal(res["prefLabel"], lang="en")))
+        for res_type in res.get("type"):
+            g.add((uri, RDF.type, URIRef(res_type)))
+        if res.get("altLabel"):
+            g.add((uri, SKOS.altLabel, Literal(res["altLabel"], lang="en")))
+        if res.get("hiddenLabel"):
+            g.add((uri, SKOS.hiddenLabel, Literal(res["hiddenLabel"], lang="en")))
+
+    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/search/metadata", methods=["GET"])
