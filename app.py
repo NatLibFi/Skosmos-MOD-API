@@ -6,7 +6,7 @@ import requests
 app = Flask(__name__)
 
 
-MOD = Namespace('https://w3id.org/mod#')
+MOD = Namespace("https://w3id.org/mod#")
 
 JSONLD_CONTEXT = {
     "dcterms": str(DCTERMS),
@@ -31,10 +31,10 @@ def artefacts():
         g.add((uri, DCTERMS.identifier, Literal(voc_details['id'], lang='en')))
         g.add((uri, DCTERMS.type, MOD.SemanticArtefact))
         g.add((uri, DCTERMS.accessRights, Literal("public", lang='en')))
-        g.add((uri, DCAT.landingPage, Literal(voc_details['@context']['@base'], lang='en')))
+        g.add((uri, DCAT.landingPage, URIRef("https://finto.fi/" + voc_details["id"])))
 
         for lang in voc_details['languages']:
-            g.add((uri, DCTERMS.language, Literal(lang, lang='en')))
+            g.add((uri, DCTERMS.language, Literal(lang)))
 
     response = make_response(g.serialize(format='json-ld', context=JSONLD_CONTEXT))
     response.headers['Content-Type'] = "application/json"
@@ -45,8 +45,7 @@ def artefacts():
 def artefact(artefactID):
     g = Graph()
 
-    params = { "lang": "en" }
-    voc_details = requests.get(API_BASE_URL + artefactID + "/", params=params).json()
+    voc_details = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" }).json()
 
     uri = URIRef("http://example.org/" + voc_details['id'])
 
@@ -55,10 +54,10 @@ def artefact(artefactID):
     g.add((uri, DCTERMS.identifier, Literal(voc_details['id'], lang='en')))
     g.add((uri, DCTERMS.type, MOD.SemanticArtefact))
     g.add((uri, DCTERMS.accessRights, Literal("public", lang='en')))
-    g.add((uri, DCAT.landingPage, Literal(voc_details['@context']['@base'], lang='en')))
+    g.add((uri, DCAT.landingPage, URIRef("https://finto.fi/" + voc_details["id"])))
 
     for lang in voc_details['languages']:
-        g.add((uri, DCTERMS.language, Literal(lang, lang='en')))
+        g.add((uri, DCTERMS.language, Literal(lang)))
 
     response = make_response(g.serialize(format='json-ld', context=JSONLD_CONTEXT))
     response.headers['Content-Type'] = "application/json"
