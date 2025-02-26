@@ -91,9 +91,13 @@ def artefact_resources(artefactID):
     return "/artefacts/" + artefactID + "/resources"
 
 
-@app.route("/artefacts/<artefactID>/resources/<resourceID>", methods=["GET"])
+@app.route("/artefacts/<artefactID>/resources/<path:resourceID>", methods=["GET"])
 def artefact_resource(artefactID, resourceID):
-    return "/artefacts/" + artefactID + "/resources/" + resourceID
+    data = requests.get(API_BASE_URL + artefactID + "/data", params={"uri": resourceID, "lang": "en", "format": "application/ld+json"}).json()
+
+    response = make_response(data)
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/resources/classes", methods=["GET"])
