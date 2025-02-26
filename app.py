@@ -98,7 +98,20 @@ def artefact_resource(artefactID, resourceID):
 
 @app.route("/artefacts/<artefactID>/resources/classes", methods=["GET"])
 def artefact_resource_classes(artefactID):
-    return "/artefacts/" + artefactID + "/resources/classes"
+    g = Graph()
+
+    voc_details = requests.get(API_BASE_URL + artefactID + "/types", params={ "lang": "en" }).json()
+
+    for voc_type in voc_details.get("types"):
+        uri = URIRef(voc_type["uri"])
+        if voc_type.get("label"):
+            g.add((uri, RDFS.label, Literal(voc_type["label"], lang="en")))
+        if voc_type.get("superclass"):
+            g.add((uri, RDFS.subClassOf, URIRef(voc_type["superclass"])))
+
+    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/resources/concepts", methods=["GET"])
@@ -128,7 +141,7 @@ def artefact_resource_schemes(artefactID):
         if scheme.get("label"):
             g.add((uri, RDFS.label, Literal(scheme["label"], lang="en")))
         if scheme.get("prefLabel"):
-            g.add((uri,SKOS.prefLabel, Literal(scheme["prefLabel"], lang="en")))
+            g.add((uri, SKOS.prefLabel, Literal(scheme["prefLabel"], lang="en")))
         if scheme.get("title"):
             g.add((uri, DCTERMS.title, Literal(scheme["title"], lang="en")))
 
@@ -149,9 +162,8 @@ def artefact_resource_collection(artefactID):
         g.add((uri, RDF.type, SKOS.Collection))
         g.add((uri, SKOS.prefLabel, Literal(group["prefLabel"], lang="en")))
 
-        if group.get("childGroups"):
-            for child in group.get("childGroups"):
-                g.add((uri, SKOS.member, URIRef(child)))
+        for child in group.get("childGroups", []):
+            g.add((uri, SKOS.member, URIRef(child)))
 
     response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
