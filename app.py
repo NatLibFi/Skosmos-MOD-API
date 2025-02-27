@@ -7,13 +7,15 @@ app = Flask(__name__)
 
 
 MOD = Namespace("https://w3id.org/mod#")
+SKOSXL = Namespace("http://www.w3.org/2008/05/skos-xl#")
 
 JSONLD_CONTEXT = {
     "dcterms": str(DCTERMS),
     "dcat": str(DCAT),
     "mod": str(MOD),
     "rdfs": str(RDFS),
-    "skos": str(SKOS)
+    "skos": str(SKOS),
+    "skosxl": str(SKOSXL)
 }
 
 API_BASE_URL = "https://api.finto.fi/rest/v1/"
@@ -200,7 +202,31 @@ def artefact_resource_collection(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/labels", methods=["GET"])
 def artefact_resource_labels(artefactID):
-    return "/artefacts/" + artefactID + "/resources/labels"
+    pagesize = request.args.get("pagesize")
+    page = request.args.get("page")
+
+    data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
+
+    query = """
+        PREFIX skosxl: <http://www.w3.org/2008/05/skos-xl#>
+        DESCRIBE ?s
+        WHERE {
+            ?s a skosxl:Label .
+        }
+        ORDER BY (str(?s))
+        LIMIT %s
+        OFFSET %s
+    """ % (pagesize, (int(page) - 1) * int(pagesize))
+    
+    g=Graph()
+    g.parse(data=data)
+
+    result_graph = Graph()
+    result_graph += g.query(query)
+
+    response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/", methods=["GET"])
