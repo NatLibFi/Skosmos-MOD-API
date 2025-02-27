@@ -151,7 +151,31 @@ def artefact_resource_concepts(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/properties", methods=["GET"])
 def artefact_resource_properties(artefactID):
-    return "/artefacts/" + artefactID + "/resources/properties"
+    pagesize = request.args.get("pagesize")
+    page = request.args.get("page")
+
+    data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
+
+    query = """
+        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+        DESCRIBE ?p
+        WHERE {
+            ?p a rdf:Property .
+        }
+        ORDER BY (str(?p))
+        LIMIT %s
+        OFFSET %s
+    """ % (pagesize, (int(page) - 1) * int(pagesize))
+    
+    g=Graph()
+    g.parse(data=data)
+
+    result_graph = Graph()
+    result_graph += g.query(query)
+
+    response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/resources/individuals", methods=["GET"])
