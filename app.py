@@ -120,7 +120,31 @@ def artefact_resource_classes(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/concepts", methods=["GET"])
 def artefact_resource_concepts(artefactID):
-    return "/artefacts/" + artefactID + "/resources/concepts"
+    pagesize = request.args.get("pagesize")
+    page = request.args.get("page")
+
+    data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
+
+    query = """
+        PREFIX skos:<http://www.w3.org/2004/02/skos/core#>
+        DESCRIBE ?s
+        WHERE {
+            ?s a skos:Concept .
+        }
+        ORDER BY (str(?s))
+        LIMIT %s
+        OFFSET %s
+    """ % (pagesize, (int(page) - 1) * int(pagesize))
+    
+    g=Graph()
+    g.parse(data=data)
+
+    result_graph = Graph()
+    result_graph += g.query(query)
+
+    response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/resources/properties", methods=["GET"])
