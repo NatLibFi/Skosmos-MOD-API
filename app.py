@@ -22,10 +22,17 @@ API_BASE_URL = "https://api.finto.fi/rest/v1/"
 
 @app.route("/artefacts", methods=["GET"])
 def artefacts():
+    pagesize = int(request.args.get("pagesize", 50))
+    page = int(request.args.get("page", 1))
+
     g = Graph()
 
-    vocabularies = requests.get(API_BASE_URL + "vocabularies/", params={ "lang": "en" }).json()
-    for voc in vocabularies["vocabularies"]:
+    ret = requests.get(API_BASE_URL + "vocabularies/", params={ "lang": "en" }).json()
+
+    start_index = (page - 1) * pagesize
+    end_index = start_index + pagesize
+    vocabularies = sorted(ret["vocabularies"], key=lambda d: d["id"])[start_index:end_index]
+    for voc in vocabularies:
         voc_details = requests.get(API_BASE_URL + voc["id"] + "/", params={ "lang": "en" }).json()
 
         uri = URIRef("http://example.org/" + voc_details["id"])
@@ -104,11 +111,17 @@ def artefact_resource(artefactID, resourceID):
 
 @app.route("/artefacts/<artefactID>/resources/classes", methods=["GET"])
 def artefact_resource_classes(artefactID):
+    pagesize = int(request.args.get("pagesize", 50))
+    page = int(request.args.get("page", 1))
+
     g = Graph()
 
-    voc_details = requests.get(API_BASE_URL + artefactID + "/types", params={ "lang": "en" }).json()
+    ret = requests.get(API_BASE_URL + artefactID + "/types", params={ "lang": "en" }).json()
 
-    for voc_type in voc_details.get("types"):
+    start_index = (page - 1) * pagesize
+    end_index = start_index + pagesize
+    types = sorted(ret.get("types", []), key=lambda d: d["uri"])[start_index:end_index]
+    for voc_type in types:
         uri = URIRef(voc_type["uri"])
         if voc_type.get("label"):
             g.add((uri, RDFS.label, Literal(voc_type["label"], lang="en")))
@@ -122,8 +135,8 @@ def artefact_resource_classes(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/concepts", methods=["GET"])
 def artefact_resource_concepts(artefactID):
-    pagesize = request.args.get("pagesize")
-    page = request.args.get("page")
+    pagesize = request.args.get("pagesize", 50)
+    page = request.args.get("page", 1)
 
     data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
 
@@ -151,8 +164,8 @@ def artefact_resource_concepts(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/properties", methods=["GET"])
 def artefact_resource_properties(artefactID):
-    pagesize = request.args.get("pagesize")
-    page = request.args.get("page")
+    pagesize = request.args.get("pagesize", 50)
+    page = request.args.get("page", 1)
 
     data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
 
@@ -185,11 +198,17 @@ def artefact_resource_individuals(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/schemes", methods=["GET"])
 def artefact_resource_schemes(artefactID):
+    pagesize = int(request.args.get("pagesize", 50))
+    page = int(request.args.get("page", 1))
+
     g = Graph()
 
-    voc_details = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" }).json()
+    ret = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" }).json()
 
-    for scheme in voc_details.get("conceptschemes"):
+    start_index = (page - 1) * pagesize
+    end_index = start_index + pagesize
+    schemes = sorted(ret.get("conceptschemes", []), key=lambda d: d["uri"])[start_index:end_index]
+    for scheme in schemes:
         uri = URIRef(scheme["uri"])
         g.add((uri, RDF.type, URIRef(scheme["type"])))
         if scheme.get("label"):
@@ -206,11 +225,17 @@ def artefact_resource_schemes(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/collection", methods=["GET"])
 def artefact_resource_collection(artefactID):
+    pagesize = int(request.args.get("pagesize", 50))
+    page = int(request.args.get("page", 1))
+
     g = Graph()
 
-    voc_details = requests.get(API_BASE_URL + artefactID + "/groups", params={ "lang": "en" }).json()
+    ret = requests.get(API_BASE_URL + artefactID + "/groups", params={ "lang": "en" }).json()
 
-    for group in voc_details.get("groups"):
+    start_index = (page - 1) * pagesize
+    end_index = start_index + pagesize
+    groups = sorted(ret.get("groups", []), key=lambda d: d["uri"])[start_index:end_index]
+    for group in groups:
         uri = URIRef(group["uri"])
         
         g.add((uri, RDF.type, SKOS.Collection))
@@ -226,8 +251,8 @@ def artefact_resource_collection(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/labels", methods=["GET"])
 def artefact_resource_labels(artefactID):
-    pagesize = request.args.get("pagesize")
-    page = request.args.get("page")
+    pagesize = request.args.get("pagesize", 50)
+    page = request.args.get("page", 1)
 
     data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
 
