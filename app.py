@@ -97,7 +97,14 @@ def artefact_record(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources", methods=["GET"])
 def artefact_resources(artefactID):
-    return "/artefacts/" + artefactID + "/resources"
+    data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
+
+    g = Graph()
+    g.parse(data=data)
+
+    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/resources/<path:resourceID>", methods=["GET"])
