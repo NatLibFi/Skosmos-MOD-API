@@ -18,7 +18,15 @@ JSONLD_CONTEXT = {
     "skosxl": str(SKOSXL)
 }
 
+FORMATS = {
+    "1": { "format": "text/turtle", "uri": "http://www.w3.org/ns/formats/Turtle" },
+    "2": { "format": "application/rdf+xml", "uri": "https://www.w3.org/ns/formats/data/RDF_XML" },
+    "3": { "format": "application/marcxml+xml", "uri": "https://www.loc.gov/standards/marcxml/" },
+    "4": { "format": "application/json+ld", "uri": "http://www.w3.org/ns/formats/JSON-LD" }
+}
+
 API_BASE_URL = "https://api.finto.fi/rest/v1/"
+
 
 @app.route("/artefacts", methods=["GET"])
 def artefacts():
@@ -35,7 +43,7 @@ def artefacts():
     for voc in vocabularies:
         voc_details = requests.get(API_BASE_URL + voc["id"] + "/", params={ "lang": "en" }).json()
 
-        uri = URIRef("http://example.org/" + voc_details["id"])
+        uri = URIRef(request.url_root + "artefacts/" + voc_details["id"])
 
         g.add((uri, RDF.type, MOD.SemanticArtefact))
         g.add((uri, DCTERMS.title, Literal(voc_details["title"], lang="en")))
@@ -58,7 +66,7 @@ def artefact(artefactID):
 
     voc_details = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" }).json()
 
-    uri = URIRef("http://example.org/" + voc_details["id"])
+    uri = URIRef(request.url_root + "artefacts/" + voc_details["id"])
 
     g.add((uri, RDF.type, MOD.SemanticArtefact))
     g.add((uri, DCTERMS.title, Literal(voc_details["title"], lang="en")))
@@ -77,12 +85,44 @@ def artefact(artefactID):
 
 @app.route("/artefacts/<artefactID>/distributions", methods=["GET"])
 def artefact_distributions(artefactID):
-    return "/artefacts/" + artefactID + "/distributions"
+    g = Graph()
+
+    for i, f in FORMATS.items():
+        data = requests.head(API_BASE_URL + artefactID + "/data", params={"format": f["format"]})
+
+        if data.status_code == 302:
+            uri = URIRef(request.url_root + "artefacts/" + artefactID + "/distributions/" + str(i))
+
+            g.add((uri, RDF.type, MOD.semanticArtefactDistribution))
+            g.add((uri, DCAT.downloadURL, URIRef(data.headers["location"])))
+            g.add((uri, DCAT.accessURL, URIRef("https://finto.fi/" + artefactID)))
+            g.add((uri, DCTERMS.accessRights, Literal("public", lang="en")))
+            g.add((uri, MOD.hasSyntax, URIRef(f["uri"])))
+
+    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/distributions/<distributionID>", methods=["GET"])
 def artefact_distribution(artefactID, distributionID):
-    return "/artefacts/" + artefactID + "/distributions/"+ distributionID
+    g = Graph()
+
+    f = FORMATS[distributionID]
+    data = requests.head(API_BASE_URL + artefactID + "/data", params={"format": f["format"]})
+    
+    if data.status_code == 302:
+        uri = URIRef(request.url_root + "artefacts/" + artefactID + "/distributions/" + distributionID)
+
+        g.add((uri, RDF.type, MOD.semanticArtefactDistribution))
+        g.add((uri, DCAT.downloadURL, URIRef(data.headers["location"])))
+        g.add((uri, DCAT.accessURL, URIRef("https://finto.fi/" + artefactID)))
+        g.add((uri, DCTERMS.accessRights, Literal("public", lang="en")))
+        g.add((uri, MOD.hasSyntax, URIRef(f["uri"])))
+
+    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 
 @app.route("/artefacts/<artefactID>/distributions/latest/resources", methods=["GET"])
