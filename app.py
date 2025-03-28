@@ -89,9 +89,17 @@ def artefact(artefactID):
 
 @app.route("/artefacts/<artefactID>/distributions", methods=["GET"])
 def artefact_distributions(artefactID):
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
+    
     g = Graph()
 
-    for i, f in enumerate(FORMATS):
+    start_index = (int(page) - 1) * int(pagesize)
+    end_index = start_index + int(pagesize)
+    for i, f in enumerate(FORMATS[start_index:end_index]):
         data = requests.head(API_BASE_URL + artefactID + "/data", params={"format": f["format"]})
         if data.status_code == 404:
             return "Artefact not found", 404
@@ -177,8 +185,11 @@ def artefact_resource(artefactID, resourceID):
 
 @app.route("/artefacts/<artefactID>/resources/classes", methods=["GET"])
 def artefact_resource_classes(artefactID):
-    pagesize = int(request.args.get("pagesize", 50))
-    page = int(request.args.get("page", 1))
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
 
     g = Graph()
 
@@ -188,8 +199,8 @@ def artefact_resource_classes(artefactID):
 
     data = ret.json()
 
-    start_index = (page - 1) * pagesize
-    end_index = start_index + pagesize
+    start_index = (int(page) - 1) * int(pagesize)
+    end_index = start_index + int(pagesize)
     types = sorted(data.get("types", []), key=lambda d: d["uri"])[start_index:end_index]
     for voc_type in types:
         uri = URIRef(voc_type["uri"])
@@ -205,8 +216,11 @@ def artefact_resource_classes(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/concepts", methods=["GET"])
 def artefact_resource_concepts(artefactID):
-    pagesize = request.args.get("pagesize", 50)
-    page = request.args.get("page", 1)
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
 
     ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
     if ret.status_code == 404:
@@ -238,8 +252,11 @@ def artefact_resource_concepts(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/properties", methods=["GET"])
 def artefact_resource_properties(artefactID):
-    pagesize = request.args.get("pagesize", 50)
-    page = request.args.get("page", 1)
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
 
     ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
     if ret.status_code == 404:
@@ -276,8 +293,11 @@ def artefact_resource_individuals(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/schemes", methods=["GET"])
 def artefact_resource_schemes(artefactID):
-    pagesize = int(request.args.get("pagesize", 50))
-    page = int(request.args.get("page", 1))
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
 
     g = Graph()
 
@@ -287,8 +307,8 @@ def artefact_resource_schemes(artefactID):
 
     data = ret.json()
 
-    start_index = (page - 1) * pagesize
-    end_index = start_index + pagesize
+    start_index = (int(page) - 1) * int(pagesize)
+    end_index = start_index + int(pagesize)
     schemes = sorted(data.get("conceptschemes", []), key=lambda d: d["uri"])[start_index:end_index]
     for scheme in schemes:
         uri = URIRef(scheme["uri"])
@@ -307,8 +327,11 @@ def artefact_resource_schemes(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/collection", methods=["GET"])
 def artefact_resource_collection(artefactID):
-    pagesize = int(request.args.get("pagesize", 50))
-    page = int(request.args.get("page", 1))
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
 
     g = Graph()
 
@@ -318,8 +341,8 @@ def artefact_resource_collection(artefactID):
 
     data = ret.json()
 
-    start_index = (page - 1) * pagesize
-    end_index = start_index + pagesize
+    start_index = (int(page) - 1) * int(pagesize)
+    end_index = start_index + int(pagesize)
     groups = sorted(data.get("groups", []), key=lambda d: d["uri"])[start_index:end_index]
     for group in groups:
         uri = URIRef(group["uri"])
@@ -337,8 +360,11 @@ def artefact_resource_collection(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/labels", methods=["GET"])
 def artefact_resource_labels(artefactID):
-    pagesize = request.args.get("pagesize", 50)
-    page = request.args.get("page", 1)
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
 
     ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
     if ret.status_code == 404:
@@ -390,9 +416,12 @@ def search():
 
 @app.route("/search/content", methods=["GET"])
 def search_content():
-    g = Graph()
     q = request.args.get("q")
-
+    if not q:
+        return "Search query parameter is required", 400
+    
+    g = Graph()
+    
     search_results = requests.get(API_BASE_URL + "/search/", params={ "query": q, "lang": "en", "unique": True }).json()["results"]
     for res in search_results:
         uri = URIRef(res["uri"])
