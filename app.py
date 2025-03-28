@@ -64,7 +64,11 @@ def artefacts():
 def artefact(artefactID):
     g = Graph()
 
-    voc_details = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" }).json()
+    ret = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" })
+    if ret.status_code == 404:
+        return "Artefact not found", 404
+
+    voc_details = ret.json()
 
     uri = URIRef(request.url_root + "artefacts/" + voc_details["id"])
 
@@ -89,6 +93,8 @@ def artefact_distributions(artefactID):
 
     for i, f in enumerate(FORMATS):
         data = requests.head(API_BASE_URL + artefactID + "/data", params={"format": f["format"]})
+        if data.status_code == 404:
+            return "Artefact not found", 404
 
         if data.status_code == 302:
             uri = URIRef(request.url_root + "artefacts/" + artefactID + "/distributions/" + str(i + 1))
@@ -108,8 +114,13 @@ def artefact_distributions(artefactID):
 def artefact_distribution(artefactID, distributionID):
     g = Graph()
 
+    if (not distributionID.isdigit() or int(distributionID) < 1 or int(distributionID) > len(FORMATS)):
+        return "Distribution not found", 404
+
     f = FORMATS[int(distributionID) - 1]
     data = requests.head(API_BASE_URL + artefactID + "/data", params={"format": f["format"]})
+    if data.status_code == 404:
+        return "Artefact not found", 404
     
     if data.status_code == 302:
         uri = URIRef(request.url_root + "artefacts/" + artefactID + "/distributions/" + distributionID)
@@ -137,7 +148,11 @@ def artefact_record(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources", methods=["GET"])
 def artefact_resources(artefactID):
-    data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
+    ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
+    if ret.status_code == 404:
+        return "Artefact not found", 404
+
+    data = ret.text
 
     g = Graph()
     g.parse(data=data)
@@ -149,7 +164,11 @@ def artefact_resources(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/<path:resourceID>", methods=["GET"])
 def artefact_resource(artefactID, resourceID):
-    data = requests.get(API_BASE_URL + artefactID + "/data", params={"uri": resourceID, "lang": "en", "format": "application/ld+json"}).json()
+    ret = requests.get(API_BASE_URL + artefactID + "/data", params={"uri": resourceID, "lang": "en", "format": "application/ld+json"})
+    if ret.status_code == 404:
+        return "Artefact or resource not found", 404
+
+    data = ret.json()
 
     response = make_response(data)
     response.headers["Content-Type"] = "application/json"
@@ -163,11 +182,15 @@ def artefact_resource_classes(artefactID):
 
     g = Graph()
 
-    ret = requests.get(API_BASE_URL + artefactID + "/types", params={ "lang": "en" }).json()
+    ret = requests.get(API_BASE_URL + artefactID + "/types", params={ "lang": "en" })
+    if ret.status_code == 404:
+        return "Artefact not found", 404
+
+    data = ret.json()
 
     start_index = (page - 1) * pagesize
     end_index = start_index + pagesize
-    types = sorted(ret.get("types", []), key=lambda d: d["uri"])[start_index:end_index]
+    types = sorted(data.get("types", []), key=lambda d: d["uri"])[start_index:end_index]
     for voc_type in types:
         uri = URIRef(voc_type["uri"])
         if voc_type.get("label"):
@@ -185,7 +208,11 @@ def artefact_resource_concepts(artefactID):
     pagesize = request.args.get("pagesize", 50)
     page = request.args.get("page", 1)
 
-    data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
+    ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
+    if ret.status_code == 404:
+        return "Artefact not found", 404
+
+    data = ret.text
 
     query = """
         PREFIX skos:<http://www.w3.org/2004/02/skos/core#>
@@ -214,7 +241,11 @@ def artefact_resource_properties(artefactID):
     pagesize = request.args.get("pagesize", 50)
     page = request.args.get("page", 1)
 
-    data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
+    ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
+    if ret.status_code == 404:
+        return "Artefact not found", 404
+
+    data = ret.text
 
     query = """
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -250,11 +281,15 @@ def artefact_resource_schemes(artefactID):
 
     g = Graph()
 
-    ret = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" }).json()
+    ret = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" })
+    if ret.status_code == 404:
+        return "Artefact not found", 404
+
+    data = ret.json()
 
     start_index = (page - 1) * pagesize
     end_index = start_index + pagesize
-    schemes = sorted(ret.get("conceptschemes", []), key=lambda d: d["uri"])[start_index:end_index]
+    schemes = sorted(data.get("conceptschemes", []), key=lambda d: d["uri"])[start_index:end_index]
     for scheme in schemes:
         uri = URIRef(scheme["uri"])
         g.add((uri, RDF.type, URIRef(scheme["type"])))
@@ -277,11 +312,15 @@ def artefact_resource_collection(artefactID):
 
     g = Graph()
 
-    ret = requests.get(API_BASE_URL + artefactID + "/groups", params={ "lang": "en" }).json()
+    ret = requests.get(API_BASE_URL + artefactID + "/groups", params={ "lang": "en" })
+    if ret.status_code == 404:
+        return "Artefact not found", 404
+
+    data = ret.json()
 
     start_index = (page - 1) * pagesize
     end_index = start_index + pagesize
-    groups = sorted(ret.get("groups", []), key=lambda d: d["uri"])[start_index:end_index]
+    groups = sorted(data.get("groups", []), key=lambda d: d["uri"])[start_index:end_index]
     for group in groups:
         uri = URIRef(group["uri"])
         
@@ -301,7 +340,11 @@ def artefact_resource_labels(artefactID):
     pagesize = request.args.get("pagesize", 50)
     page = request.args.get("page", 1)
 
-    data = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"}).text
+    ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
+    if ret.status_code == 404:
+        return "Artefact not found", 404
+
+    data = ret.text
 
     query = """
         PREFIX skosxl: <http://www.w3.org/2008/05/skos-xl#>
