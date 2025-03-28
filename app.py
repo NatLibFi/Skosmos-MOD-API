@@ -18,12 +18,12 @@ JSONLD_CONTEXT = {
     "skosxl": str(SKOSXL)
 }
 
-FORMATS = {
-    "1": { "format": "text/turtle", "uri": "http://www.w3.org/ns/formats/Turtle" },
-    "2": { "format": "application/rdf+xml", "uri": "https://www.w3.org/ns/formats/data/RDF_XML" },
-    "3": { "format": "application/marcxml+xml", "uri": "https://www.loc.gov/standards/marcxml/" },
-    "4": { "format": "application/json+ld", "uri": "http://www.w3.org/ns/formats/JSON-LD" }
-}
+FORMATS = [
+    { "format": "text/turtle", "uri": "http://www.w3.org/ns/formats/Turtle" },
+    { "format": "application/rdf+xml", "uri": "https://www.w3.org/ns/formats/data/RDF_XML" },
+    { "format": "application/marcxml+xml", "uri": "https://www.loc.gov/standards/marcxml/" },
+    { "format": "application/json+ld", "uri": "http://www.w3.org/ns/formats/JSON-LD" }
+]
 
 API_BASE_URL = "https://api.finto.fi/rest/v1/"
 
@@ -87,11 +87,11 @@ def artefact(artefactID):
 def artefact_distributions(artefactID):
     g = Graph()
 
-    for i, f in FORMATS.items():
+    for i, f in enumerate(FORMATS):
         data = requests.head(API_BASE_URL + artefactID + "/data", params={"format": f["format"]})
 
         if data.status_code == 302:
-            uri = URIRef(request.url_root + "artefacts/" + artefactID + "/distributions/" + str(i))
+            uri = URIRef(request.url_root + "artefacts/" + artefactID + "/distributions/" + str(i + 1))
 
             g.add((uri, RDF.type, MOD.semanticArtefactDistribution))
             g.add((uri, DCAT.downloadURL, URIRef(data.headers["location"])))
@@ -108,7 +108,7 @@ def artefact_distributions(artefactID):
 def artefact_distribution(artefactID, distributionID):
     g = Graph()
 
-    f = FORMATS[distributionID]
+    f = FORMATS[int(distributionID) - 1]
     data = requests.head(API_BASE_URL + artefactID + "/data", params={"format": f["format"]})
     
     if data.status_code == 302:
@@ -125,9 +125,9 @@ def artefact_distribution(artefactID, distributionID):
     return response
 
 
-@app.route("/artefacts/<artefactID>/distributions/latest/resources", methods=["GET"])
-def artefact_distribution_latest_resources(artefactID):
-    return "/artefacts/" + artefactID + "/distributions/latest/resources"
+@app.route("/artefacts/<artefactID>/distributions/latest", methods=["GET"])
+def artefact_distribution_latest(artefactID):
+    return "/artefacts/" + artefactID + "/distributions/latest"
 
 
 @app.route("/artefacts/<artefactID>/record", methods=["GET"])
