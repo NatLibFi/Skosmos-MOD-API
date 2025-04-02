@@ -30,15 +30,18 @@ API_BASE_URL = "https://api.finto.fi/rest/v1/"
 
 @app.route("/artefacts", methods=["GET"])
 def artefacts():
-    pagesize = int(request.args.get("pagesize", 50))
-    page = int(request.args.get("page", 1))
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
 
     g = Graph()
 
     ret = requests.get(API_BASE_URL + "vocabularies/", params={ "lang": "en" }).json()
 
-    start_index = (page - 1) * pagesize
-    end_index = start_index + pagesize
+    start_index = (int(page) - 1) * int(pagesize)
+    end_index = start_index + int(pagesize)
     vocabularies = sorted(ret["vocabularies"], key=lambda d: d["id"])[start_index:end_index]
     for voc in vocabularies:
         voc_details = requests.get(API_BASE_URL + voc["id"] + "/", params={ "lang": "en" }).json()
