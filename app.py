@@ -1,21 +1,25 @@
 from flask import Flask, make_response, request
+import math
 from rdflib import Graph, URIRef, Literal, Namespace
-from rdflib.namespace import RDF, RDFS, DCTERMS, DCAT, SKOS
+from rdflib.namespace import RDF, RDFS, DCTERMS, DCAT, SKOS, XSD
 import requests
 
 app = Flask(__name__)
 
 
+HYDRA = Namespace("http://www.w3.org/ns/hydra/core#")
 MOD = Namespace("https://w3id.org/mod#")
 SKOSXL = Namespace("http://www.w3.org/2008/05/skos-xl#")
 
 JSONLD_CONTEXT = {
     "dcterms": str(DCTERMS),
     "dcat": str(DCAT),
+    "hydra": str(HYDRA),
     "mod": str(MOD),
     "rdfs": str(RDFS),
     "skos": str(SKOS),
-    "skosxl": str(SKOSXL)
+    "skosxl": str(SKOSXL),
+    "xsd": str(XSD)
 }
 
 FORMATS = [
@@ -40,6 +44,22 @@ def artefacts():
 
     ret = requests.get(API_BASE_URL + "vocabularies/", params={ "lang": "en" }).json()
 
+    # Add hydra collection
+    collectionUri = URIRef(request.url_root + "artefacts")
+    g.add((collectionUri, RDF.type, HYDRA.Collection))
+    g.add((collectionUri, HYDRA.itemsPerPage, Literal(pagesize, datatype=XSD.nonNegativeInteger)))
+    g.add((collectionUri, HYDRA.totalItems, Literal(len(ret["vocabularies"]), datatype=XSD.nonNegativeInteger)))
+
+    # Add hydra view
+    viewUri = URIRef(request.url_root + "artefacts?page=" + page + "&pagesize=" + pagesize)
+    g.add((collectionUri, HYDRA.view, viewUri))
+    g.add((viewUri, RDF.type, HYDRA.PartialCollectionView))
+    g.add((viewUri, HYDRA.first, URIRef(request.url_root + "artefacts?page=1&pagesize=" + pagesize)))
+    g.add((viewUri, HYDRA.last, URIRef(request.url_root + "artefacts?page=" + str(math.ceil(len(ret["vocabularies"]) / int(pagesize))) + "&pagesize=" + pagesize)))
+    g.add((viewUri, HYDRA.next, URIRef(request.url_root + "artefacts?page=" + str(min(int(page) + 1, math.ceil(len(ret["vocabularies"]) / int(pagesize)))) + "&pagesize=" + pagesize)))
+    g.add((viewUri, HYDRA.previous, URIRef(request.url_root + "artefacts?page=" + str(max(int(page) - 1, 1)) + "&pagesize=" + pagesize)))
+
+    # Add vocabulary artefacts
     start_index = (int(page) - 1) * int(pagesize)
     end_index = start_index + int(pagesize)
     vocabularies = sorted(ret["vocabularies"], key=lambda d: d["id"])[start_index:end_index]
@@ -47,6 +67,8 @@ def artefacts():
         voc_details = requests.get(API_BASE_URL + voc["id"] + "/", params={ "lang": "en" }).json()
 
         uri = URIRef(request.url_root + "artefacts/" + voc_details["id"])
+
+        g.add((collectionUri, HYDRA.member, uri))
 
         g.add((uri, RDF.type, MOD.SemanticArtefact))
         g.add((uri, DCTERMS.title, Literal(voc_details["title"], lang="en")))
@@ -425,7 +447,7 @@ def search_content():
     
     g = Graph()
     
-    search_results = requests.get(API_BASE_URL + "/search/", params={ "query": q, "lang": "en", "unique": True }).json()["results"]
+    search_results = requests.get(API_BASE_URL + "/search/", params={ "query": q, "unique": True }).json()["results"]
     for res in search_results:
         uri = URIRef(res["uri"])
 
