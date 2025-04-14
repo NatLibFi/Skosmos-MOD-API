@@ -2,6 +2,7 @@ from flask import Flask, make_response, request
 import math
 from rdflib import Graph, URIRef, Literal, Namespace
 from rdflib.namespace import RDF, RDFS, DCTERMS, DCAT, SKOS, XSD
+import re
 import requests
 
 app = Flask(__name__)
@@ -197,6 +198,8 @@ def artefact_resources(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/<path:resourceID>", methods=["GET"])
 def artefact_resource(artefactID, resourceID):
+    resourceID = re.sub(r'^(https?):/(?!/)', r'\1://', resourceID) # Fixing malformed URIs (http:/ -> http:// or https:/ -> https://)
+
     ret = requests.get(API_BASE_URL + artefactID + "/data", params={"uri": resourceID, "lang": "en", "format": "application/ld+json"})
     if ret.status_code == 404:
         return "Artefact or resource not found", 404
