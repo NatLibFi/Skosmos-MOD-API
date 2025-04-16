@@ -45,21 +45,6 @@ def artefacts():
 
     ret = requests.get(API_BASE_URL + "vocabularies/", params={ "lang": "en" }).json()
 
-    # Add hydra collection
-    collectionUri = URIRef(request.url_root + "artefacts")
-    g.add((collectionUri, RDF.type, HYDRA.Collection))
-    g.add((collectionUri, HYDRA.itemsPerPage, Literal(pagesize, datatype=XSD.nonNegativeInteger)))
-    g.add((collectionUri, HYDRA.totalItems, Literal(len(ret["vocabularies"]), datatype=XSD.nonNegativeInteger)))
-
-    # Add hydra view
-    viewUri = URIRef(request.url_root + "artefacts?page=" + page + "&pagesize=" + pagesize)
-    g.add((collectionUri, HYDRA.view, viewUri))
-    g.add((viewUri, RDF.type, HYDRA.PartialCollectionView))
-    g.add((viewUri, HYDRA.first, URIRef(request.url_root + "artefacts?page=1&pagesize=" + pagesize)))
-    g.add((viewUri, HYDRA.last, URIRef(request.url_root + "artefacts?page=" + str(math.ceil(len(ret["vocabularies"]) / int(pagesize))) + "&pagesize=" + pagesize)))
-    g.add((viewUri, HYDRA.next, URIRef(request.url_root + "artefacts?page=" + str(min(int(page) + 1, math.ceil(len(ret["vocabularies"]) / int(pagesize)))) + "&pagesize=" + pagesize)))
-    g.add((viewUri, HYDRA.previous, URIRef(request.url_root + "artefacts?page=" + str(max(int(page) - 1, 1)) + "&pagesize=" + pagesize)))
-
     # Add vocabulary artefacts
     start_index = (int(page) - 1) * int(pagesize)
     end_index = start_index + int(pagesize)
@@ -68,8 +53,6 @@ def artefacts():
         voc_details = requests.get(API_BASE_URL + voc["id"] + "/", params={ "lang": "en" }).json()
 
         uri = URIRef(request.url_root + "artefacts/" + voc_details["id"])
-
-        g.add((collectionUri, HYDRA.member, uri))
 
         g.add((uri, RDF.type, MOD.SemanticArtefact))
         g.add((uri, DCTERMS.title, Literal(voc_details["title"], lang="en")))
@@ -80,6 +63,8 @@ def artefacts():
 
         for lang in voc_details["languages"]:
             g.add((uri, DCTERMS.language, Literal(lang)))
+
+    add_hydra_collection_view(g, "artefacts", MOD.SemanticArtefact, len(ret["vocabularies"]), page, pagesize)
 
     response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
@@ -266,12 +251,26 @@ def artefact_resource_concepts(artefactID):
         LIMIT %s
         OFFSET %s
     """ % (pagesize, (int(page) - 1) * int(pagesize))
+
+    query2 = """
+        PREFIX skos:<http://www.w3.org/2004/02/skos/core#>
+        SELECT (COUNT(?concept) AS ?count)
+        WHERE {
+            ?concept a skos:Concept .
+        }
+    """
     
     g=Graph()
     g.parse(data=data)
 
     result_graph = Graph()
     result_graph += g.query(query)
+    
+    count = 0
+    for x in g.query(query2):
+        count = int(x[0])
+
+    add_hydra_collection_view(result_graph, "artefacts/" + artefactID + "/resources/concepts", SKOS.Concept, count, page, pagesize)
 
     response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
@@ -475,3 +474,25 @@ def search_metadata():
 @app.route("/doc/api", methods=["GET"])
 def doc_api():
     return "/doc/api"
+
+
+def add_hydra_collection_view(graph, endpoint, resource_type, count, page, pagesize):
+    url = request.url_root + endpoint
+    # Add hydra collection
+    collection_uri = URIRef(url)
+    graph.add((collection_uri, RDF.type, HYDRA.Collection))
+    graph.add((collection_uri, HYDRA.itemsPerPage, Literal(pagesize, datatype=XSD.nonNegativeInteger)))
+    graph.add((collection_uri, HYDRA.totalItems, Literal(count, datatype=XSD.nonNegativeInteger)))
+
+    # Add hydra view
+    view_uri = URIRef(url + "?page=" + page + "&pagesize=" + pagesize)
+    graph.add((collection_uri, HYDRA.view, view_uri))
+    graph.add((view_uri, RDF.type, HYDRA.PartialCollectionView))
+    graph.add((view_uri, HYDRA.first, URIRef(url + "?page=1&pagesize=" + pagesize)))
+    graph.add((view_uri, HYDRA.last, URIRef(url + "?page=" + str(math.ceil(count / int(pagesize))) + "&pagesize=" + pagesize)))
+    graph.add((view_uri, HYDRA.next, URIRef(url + "?page=" + str(min(int(page) + 1, math.ceil(count / int(pagesize)))) + "&pagesize=" + pagesize)))
+    graph.add((view_uri, HYDRA.previous, URIRef(url + "?page=" + str(max(int(page) - 1, 1)) + "&pagesize=" + pagesize)))
+
+    # Add resources as hydra:members
+    for concept in graph.subjects(RDF.type, resource_type):
+        graph.add((collection_uri, HYDRA.member, concept))
