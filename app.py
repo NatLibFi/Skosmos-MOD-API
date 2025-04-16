@@ -9,6 +9,7 @@ app = Flask(__name__)
 
 
 HYDRA = Namespace("http://www.w3.org/ns/hydra/core#")
+ISOTHES = Namespace("http://purl.org/iso25964/skos-thes#")
 MOD = Namespace("https://w3id.org/mod#")
 SKOSXL = Namespace("http://www.w3.org/2008/05/skos-xl#")
 
@@ -16,6 +17,7 @@ JSONLD_CONTEXT = {
     "dcterms": str(DCTERMS),
     "dcat": str(DCAT),
     "hydra": str(HYDRA),
+    "isothes": str(ISOTHES),
     "mod": str(MOD),
     "rdfs": str(RDFS),
     "skos": str(SKOS),
@@ -124,6 +126,8 @@ def artefact_distributions(artefactID):
             g.add((uri, DCTERMS.accessRights, Literal("public", lang="en")))
             g.add((uri, MOD.hasSyntax, URIRef(f["uri"])))
 
+    add_hydra_collection_view(g, "artefacts/" + artefactID + "/distributions", MOD.semanticArtefactDistribution, len(set(g.subjects())), page, pagesize)
+
     response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
     return response
@@ -222,6 +226,8 @@ def artefact_resource_classes(artefactID):
         if voc_type.get("superclass"):
             g.add((uri, RDFS.subClassOf, URIRef(voc_type["superclass"])))
 
+    add_hydra_collection_view(g, "artefacts/" + artefactID + "/resources/classes", None, len(data["types"]), page, pagesize)
+
     response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
     return response
@@ -302,11 +308,25 @@ def artefact_resource_properties(artefactID):
         OFFSET %s
     """ % (pagesize, (int(page) - 1) * int(pagesize))
     
+    query2 = """
+        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+        SELECT (COUNT(?property) AS ?count)
+        WHERE {
+            ?property a rdf:Property .
+        }
+    """
+
     g=Graph()
     g.parse(data=data)
 
     result_graph = Graph()
     result_graph += g.query(query)
+
+    count = 0
+    for x in g.query(query2):
+        count = int(x[0])
+
+    add_hydra_collection_view(result_graph, "artefacts/" + artefactID + "/resources/properties", RDF.Property, count, page, pagesize)
 
     response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
@@ -347,6 +367,8 @@ def artefact_resource_schemes(artefactID):
         if scheme.get("title"):
             g.add((uri, DCTERMS.title, Literal(scheme["title"], lang="en")))
 
+    add_hydra_collection_view(g, "artefacts/" + artefactID + "/resources/schemes", None, len(data["conceptschemes"]), page, pagesize)
+
     response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
     return response
@@ -374,11 +396,14 @@ def artefact_resource_collection(artefactID):
     for group in groups:
         uri = URIRef(group["uri"])
         
+        g.add((uri, RDF.type, ISOTHES.ConceptGroup))
         g.add((uri, RDF.type, SKOS.Collection))
         g.add((uri, SKOS.prefLabel, Literal(group["prefLabel"], lang="en")))
 
         for child in group.get("childGroups", []):
             g.add((uri, SKOS.member, URIRef(child)))
+
+    add_hydra_collection_view(g, "artefacts/" + artefactID + "/resources/collection", ISOTHES.ConceptGroup, len(data["groups"]), page, pagesize)
 
     response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
@@ -410,11 +435,26 @@ def artefact_resource_labels(artefactID):
         OFFSET %s
     """ % (pagesize, (int(page) - 1) * int(pagesize))
     
+    query2 = """
+        PREFIX skosxl: <http://www.w3.org/2008/05/skos-xl#>
+        SELECT (COUNT(?label) AS ?count)
+        WHERE {
+            ?label a skosxl:Label .
+        }
+    """
+
     g=Graph()
     g.parse(data=data)
 
     result_graph = Graph()
     result_graph += g.query(query)
+
+    count = 0
+    for x in g.query(query2):
+        count = int(x[0])
+    print(count)
+
+    add_hydra_collection_view(result_graph, "artefacts/" + artefactID + "/resources/labels", SKOSXL.Label, count, page, pagesize)
 
     response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
@@ -476,10 +516,17 @@ def doc_api():
     return "/doc/api"
 
 
-def add_hydra_collection_view(graph, endpoint, resource_type, count, page, pagesize):
+def add_hydra_collection_view(graph, endpoint, subject_type, count, page, pagesize):
     url = request.url_root + endpoint
-    # Add hydra collection
+
     collection_uri = URIRef(url)
+
+    # Add subjects as hydra:members
+    subjects = graph.subjects(RDF.type, subject_type) if subject_type else graph.subjects()
+    for s in subjects:
+        graph.add((collection_uri, HYDRA.member, s))
+    
+    # Add hydra collection
     graph.add((collection_uri, RDF.type, HYDRA.Collection))
     graph.add((collection_uri, HYDRA.itemsPerPage, Literal(pagesize, datatype=XSD.nonNegativeInteger)))
     graph.add((collection_uri, HYDRA.totalItems, Literal(count, datatype=XSD.nonNegativeInteger)))
@@ -492,7 +539,3 @@ def add_hydra_collection_view(graph, endpoint, resource_type, count, page, pages
     graph.add((view_uri, HYDRA.last, URIRef(url + "?page=" + str(math.ceil(count / int(pagesize))) + "&pagesize=" + pagesize)))
     graph.add((view_uri, HYDRA.next, URIRef(url + "?page=" + str(min(int(page) + 1, math.ceil(count / int(pagesize)))) + "&pagesize=" + pagesize)))
     graph.add((view_uri, HYDRA.previous, URIRef(url + "?page=" + str(max(int(page) - 1, 1)) + "&pagesize=" + pagesize)))
-
-    # Add resources as hydra:members
-    for concept in graph.subjects(RDF.type, resource_type):
-        graph.add((collection_uri, HYDRA.member, concept))
