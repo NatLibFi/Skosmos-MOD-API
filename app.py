@@ -1,4 +1,5 @@
 from flask import Flask, make_response, request
+import json
 import math
 from rdflib import Graph, URIRef, Literal, Namespace
 from rdflib.namespace import RDF, RDFS, DCTERMS, DCAT, SKOS, XSD
@@ -171,6 +172,12 @@ def artefact_record(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources", methods=["GET"])
 def artefact_resources(artefactID):
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
+    
     ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
     if ret.status_code == 404:
         return "Artefact not found", 404
@@ -180,7 +187,34 @@ def artefact_resources(artefactID):
     g = Graph()
     g.parse(data=data)
 
-    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
+    query = """
+        DESCRIBE ?s
+        WHERE {
+            ?s ?p ?o .
+        }
+        ORDER BY (str(?s))
+        LIMIT %s
+        OFFSET %s
+    """ % (pagesize, (int(page) - 1) * int(pagesize))
+    
+    query2 = """
+        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+        SELECT (COUNT(?s) AS ?count)
+        WHERE {
+            ?s ?p ?o .
+        }
+    """
+
+    result_graph = Graph()
+    result_graph += g.query(query)
+    
+    count = 0
+    for x in g.query(query2):
+        count = int(x[0])
+
+    add_hydra_collection_view(result_graph, "artefacts/" + artefactID + "/resources", None, count, page, pagesize)
+
+    response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
     return response
 
@@ -483,6 +517,12 @@ def search():
 
 @app.route("/search/content", methods=["GET"])
 def search_content():
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+
+    if not (pagesize.isdigit() and page.isdigit()):
+        return "Pagesize and page must be integers", 400
+
     q = request.args.get("q")
     if not q:
         return "Search query parameter is required", 400
@@ -500,6 +540,20 @@ def search_content():
             g.add((uri, SKOS.altLabel, Literal(res["altLabel"], lang="en")))
         if res.get("hiddenLabel"):
             g.add((uri, SKOS.hiddenLabel, Literal(res["hiddenLabel"], lang="en")))
+
+    jsonld = json.loads(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
+
+    count = len(jsonld["@graph"])
+
+    start_index = (int(page) - 1) * int(pagesize)
+    end_index = start_index + int(pagesize)
+    jsonld["@graph"] = sorted(jsonld["@graph"], key=lambda d: d["@id"])[start_index:end_index]
+
+    g = Graph()
+
+    g.parse(data=json.dumps(jsonld), format="json-ld")
+
+    add_hydra_collection_view(g, "search/content", None, count, page, pagesize)
 
     response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
     response.headers["Content-Type"] = "application/json"
