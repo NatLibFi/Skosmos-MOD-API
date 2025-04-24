@@ -1,4 +1,4 @@
-from flask import Flask, make_response, request
+from flask import abort, Flask, make_response, request
 import json
 import math
 from rdflib import Graph, URIRef, Literal, Namespace
@@ -38,11 +38,10 @@ API_BASE_URL = "https://api.finto.fi/rest/v1/"
 
 @app.route("/artefacts", methods=["GET"])
 def artefacts():
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
 
     g = Graph()
 
@@ -69,18 +68,21 @@ def artefacts():
 
     add_hydra_collection_view(g, "artefacts", MOD.SemanticArtefact, len(ret["vocabularies"]), page, pagesize)
 
-    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(g.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
 @app.route("/artefacts/<artefactID>", methods=["GET"])
 def artefact(artefactID):
+    params = get_common_params()
+    return_format = params["format"]
+
     g = Graph()
 
     ret = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" })
     if ret.status_code == 404:
-        return "Artefact not found", 404
+        abort(404, description="Artefact not found")
 
     voc_details = ret.json()
 
@@ -96,18 +98,17 @@ def artefact(artefactID):
     for lang in voc_details["languages"]:
         g.add((uri, DCTERMS.language, Literal(lang)))
 
-    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(g.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
 @app.route("/artefacts/<artefactID>/distributions", methods=["GET"])
 def artefact_distributions(artefactID):
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
     
     g = Graph()
 
@@ -116,7 +117,7 @@ def artefact_distributions(artefactID):
     for i, f in enumerate(FORMATS[start_index:end_index]):
         data = requests.head(API_BASE_URL + artefactID + "/data", params={"format": f["format"]})
         if data.status_code == 404:
-            return "Artefact not found", 404
+            return abort(404, description="Artefact not found")
 
         if data.status_code == 302:
             uri = URIRef(request.url_root + "artefacts/" + artefactID + "/distributions/" + str(i + 1))
@@ -129,22 +130,25 @@ def artefact_distributions(artefactID):
 
     add_hydra_collection_view(g, "artefacts/" + artefactID + "/distributions", MOD.semanticArtefactDistribution, len(set(g.subjects())), page, pagesize)
 
-    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(g.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
 @app.route("/artefacts/<artefactID>/distributions/<distributionID>", methods=["GET"])
 def artefact_distribution(artefactID, distributionID):
+    params = get_common_params()
+    return_format = params["format"]
+
     g = Graph()
 
     if (not distributionID.isdigit() or int(distributionID) < 1 or int(distributionID) > len(FORMATS)):
-        return "Distribution not found", 404
+        abort(404, description="Distribution not found")
 
     f = FORMATS[int(distributionID) - 1]
     data = requests.head(API_BASE_URL + artefactID + "/data", params={"format": f["format"]})
     if data.status_code == 404:
-        return "Artefact not found", 404
+        abort(404, description="Artefact not found")
     
     if data.status_code == 302:
         uri = URIRef(request.url_root + "artefacts/" + artefactID + "/distributions/" + distributionID)
@@ -155,8 +159,8 @@ def artefact_distribution(artefactID, distributionID):
         g.add((uri, DCTERMS.accessRights, Literal("public", lang="en")))
         g.add((uri, MOD.hasSyntax, URIRef(f["uri"])))
 
-    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(g.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
@@ -172,15 +176,14 @@ def artefact_record(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources", methods=["GET"])
 def artefact_resources(artefactID):
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
     
     ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
     if ret.status_code == 404:
-        return "Artefact not found", 404
+        abort(404, description="Artefact not found")
 
     data = ret.text
 
@@ -214,39 +217,44 @@ def artefact_resources(artefactID):
 
     add_hydra_collection_view(result_graph, "artefacts/" + artefactID + "/resources", None, count, page, pagesize)
 
-    response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(result_graph.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
 @app.route("/artefacts/<artefactID>/resources/<path:resourceID>", methods=["GET"])
 def artefact_resource(artefactID, resourceID):
+    params = get_common_params()
+    return_format = params["format"]
+    print('AAA', return_format[1])
+
     resourceID = re.sub(r'^(https?):/(?!/)', r'\1://', resourceID) # Fixing malformed URIs (http:/ -> http:// or https:/ -> https://)
 
-    ret = requests.get(API_BASE_URL + artefactID + "/data", params={"uri": resourceID, "lang": "en", "format": "application/ld+json"})
+    ret = requests.get(API_BASE_URL + artefactID + "/data", params={"uri": resourceID, "lang": "en", "format": return_format[1]})
     if ret.status_code == 404:
-        return "Artefact or resource not found", 404
+        abort(404, description="Artefact or resource not found")
+    if ret.status_code == 406:
+        abort(415, description="Unsupported format")
 
-    data = ret.json()
+    data = ret.text
 
     response = make_response(data)
-    response.headers["Content-Type"] = "application/json"
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
 @app.route("/artefacts/<artefactID>/resources/classes", methods=["GET"])
 def artefact_resource_classes(artefactID):
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
 
     g = Graph()
 
     ret = requests.get(API_BASE_URL + artefactID + "/types", params={ "lang": "en" })
     if ret.status_code == 404:
-        return "Artefact not found", 404
+        abort(404, description="Artefact not found")
 
     data = ret.json()
 
@@ -262,22 +270,21 @@ def artefact_resource_classes(artefactID):
 
     add_hydra_collection_view(g, "artefacts/" + artefactID + "/resources/classes", None, len(data["types"]), page, pagesize)
 
-    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(g.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
 @app.route("/artefacts/<artefactID>/resources/concepts", methods=["GET"])
 def artefact_resource_concepts(artefactID):
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
 
     ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
     if ret.status_code == 404:
-        return "Artefact not found", 404
+        abort(404, description="Artefact not found")
 
     data = ret.text
 
@@ -312,22 +319,21 @@ def artefact_resource_concepts(artefactID):
 
     add_hydra_collection_view(result_graph, "artefacts/" + artefactID + "/resources/concepts", SKOS.Concept, count, page, pagesize)
 
-    response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(result_graph.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
 @app.route("/artefacts/<artefactID>/resources/properties", methods=["GET"])
 def artefact_resource_properties(artefactID):
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
 
     ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
     if ret.status_code == 404:
-        return "Artefact not found", 404
+        abort(404, description="Artefact not found")
 
     data = ret.text
 
@@ -362,8 +368,8 @@ def artefact_resource_properties(artefactID):
 
     add_hydra_collection_view(result_graph, "artefacts/" + artefactID + "/resources/properties", RDF.Property, count, page, pagesize)
 
-    response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(result_graph.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
@@ -374,17 +380,16 @@ def artefact_resource_individuals(artefactID):
 
 @app.route("/artefacts/<artefactID>/resources/schemes", methods=["GET"])
 def artefact_resource_schemes(artefactID):
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
 
     g = Graph()
 
     ret = requests.get(API_BASE_URL + artefactID + "/", params={ "lang": "en" })
     if ret.status_code == 404:
-        return "Artefact not found", 404
+        abort(404, description="Artefact not found")
 
     data = ret.json()
 
@@ -403,24 +408,23 @@ def artefact_resource_schemes(artefactID):
 
     add_hydra_collection_view(g, "artefacts/" + artefactID + "/resources/schemes", None, len(data["conceptschemes"]), page, pagesize)
 
-    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(g.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
 @app.route("/artefacts/<artefactID>/resources/collection", methods=["GET"])
 def artefact_resource_collection(artefactID):
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
 
     g = Graph()
 
     ret = requests.get(API_BASE_URL + artefactID + "/groups", params={ "lang": "en" })
     if ret.status_code == 404:
-        return "Artefact not found", 404
+        abort(404, description="Artefact not found")
 
     data = ret.json()
 
@@ -439,22 +443,21 @@ def artefact_resource_collection(artefactID):
 
     add_hydra_collection_view(g, "artefacts/" + artefactID + "/resources/collection", ISOTHES.ConceptGroup, len(data["groups"]), page, pagesize)
 
-    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(g.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
 @app.route("/artefacts/<artefactID>/resources/labels", methods=["GET"])
 def artefact_resource_labels(artefactID):
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
 
     ret = requests.get(API_BASE_URL + artefactID + "/data", params={"lang": "en", "format": "text/turtle"})
     if ret.status_code == 404:
-        return "Artefact not found", 404
+        abort(404, description="Artefact not found")
 
     data = ret.text
 
@@ -486,12 +489,11 @@ def artefact_resource_labels(artefactID):
     count = 0
     for x in g.query(query2):
         count = int(x[0])
-    print(count)
 
     add_hydra_collection_view(result_graph, "artefacts/" + artefactID + "/resources/labels", SKOSXL.Label, count, page, pagesize)
 
-    response = make_response(result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(result_graph.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
@@ -517,15 +519,14 @@ def search():
 
 @app.route("/search/content", methods=["GET"])
 def search_content():
-    pagesize = request.args.get("pagesize", "50")
-    page = request.args.get("page", "1")
-
-    if not (pagesize.isdigit() and page.isdigit()):
-        return "Pagesize and page must be integers", 400
-
+    params = get_common_params()
+    pagesize = params["pagesize"]
+    page = params["page"]
+    return_format = params["format"]
+    
     q = request.args.get("q")
     if not q:
-        return "Search query parameter is required", 400
+        abort(400, description="Search query parameter is required")
     
     g = Graph()
     
@@ -555,8 +556,8 @@ def search_content():
 
     add_hydra_collection_view(g, "search/content", None, count, page, pagesize)
 
-    response = make_response(g.serialize(format="json-ld", context=JSONLD_CONTEXT))
-    response.headers["Content-Type"] = "application/json"
+    response = make_response(g.serialize(format=return_format[0], context=JSONLD_CONTEXT))
+    response.headers["Content-Type"] = return_format[1]
     return response
 
 
@@ -568,6 +569,32 @@ def search_metadata():
 @app.route("/doc/api", methods=["GET"])
 def doc_api():
     return "/doc/api"
+
+
+def get_common_params():
+    pagesize = request.args.get("pagesize", "50")
+    page = request.args.get("page", "1")
+    if not (pagesize.isdigit() and page.isdigit()):
+        abort(400, description="Pagesize and page must be integers")
+
+    formats = { 
+        "jsonld": ("json-ld", "application/json"),
+        "ttl": ("ttl", "text/turtle"),
+        "rdfxml": ("xml", "application/rdf+xml")
+    }
+    format_arg = request.args.get("format")
+    if not format_arg:
+        return_format = ("json-ld", "application/json")
+    else:
+        return_format = formats.get(format_arg, None)
+        if not return_format:
+            abort(415, description="Unsupported format")
+    
+    return {
+        "pagesize": pagesize,
+        "page": page,
+        "format": return_format
+    }
 
 
 def add_hydra_collection_view(graph, endpoint, subject_type, count, page, pagesize):
