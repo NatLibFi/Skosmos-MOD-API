@@ -226,7 +226,6 @@ def artefact_resources(artefactID):
 def artefact_resource(artefactID, resourceID):
     params = get_common_params()
     return_format = params["format"]
-    print('AAA', return_format[1])
 
     resourceID = re.sub(r'^(https?):/(?!/)', r'\1://', resourceID) # Fixing malformed URIs (http:/ -> http:// or https:/ -> https://)
 
@@ -413,7 +412,7 @@ def artefact_resource_schemes(artefactID):
     return response
 
 
-@app.route("/artefacts/<artefactID>/resources/collection", methods=["GET"])
+@app.route("/artefacts/<artefactID>/resources/collections", methods=["GET"])
 def artefact_resource_collection(artefactID):
     params = get_common_params()
     pagesize = params["pagesize"]
