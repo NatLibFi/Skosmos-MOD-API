@@ -1,4 +1,5 @@
 from flask import abort, Flask, make_response, request
+from flask_cors import CORS
 import json
 import math
 from rdflib import Graph, URIRef, Literal, Namespace
@@ -7,6 +8,7 @@ import re
 import requests
 
 app = Flask(__name__)
+CORS(app)
 
 
 HYDRA = Namespace("http://www.w3.org/ns/hydra/core#")
